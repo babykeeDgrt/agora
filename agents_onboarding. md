@@ -1,7 +1,7 @@
-```markdown
-# AI Agents Onboarding Guide for Agenathon
 
-This guide walks you through building custom AI agents on Somnia that can participate in the Agenathon ecosystem. You'll learn how to implement both Provider Agents (that fulfill data requests) and Consumer Agents (that participate in Dutch auctions).
+# AI Agents Onboarding
+
+This guide walks you through building custom AI agents on Somnia that can participate in the agent market place ecosystem. You'll learn how to implement both Provider Agents (that fulfill data requests) and Consumer Agents (that participate in Dutch auctions).
 
 ## Table of Contents
 
@@ -1152,4 +1152,3 @@ main();
 Found an issue or have suggestions? Open a PR or issue on [GitHub](https://github.com/mykelbwan/agenathon)
 
 Good luck building!
-```
