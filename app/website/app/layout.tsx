@@ -6,8 +6,14 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AgentMarket",
-  description: "Trustless autonomous data marketplace on Somnia.",
+  title: "Agora",
+  description:
+    "Agora is the data layer for autonomous AI agents on Somnia.",
+  icons: {
+    icon: "/agora_logo.jpg",
+    shortcut: "/agora_logo.jpg",
+    apple: "/agora_logo.jpg",
+  },
 };
 
 export default function RootLayout({

@@ -2,12 +2,13 @@
 
 import { motion } from "framer-motion";
 import { Copy, ExternalLink } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
+import { useConsumerPlan } from "@/hooks/use-consumer-plan";
 import { explorerAddressLink, formatStt, shortenAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useSpawnAgent } from "@/hooks/use-spawn-agent";
@@ -27,23 +28,37 @@ function urgencyLabel(urgency: Urgency) {
   return "High";
 }
 
+function strategyLabel(urgency: Urgency) {
+  if (urgency === "low") return "Conservative";
+  if (urgency === "medium") return "Balanced";
+  return "Aggressive";
+}
+
 export function SpawnWizard() {
   const { address } = useAccount();
   const auctions = useMarketplaceStore((state) => state.auctions);
+  const addFeedEvent = useMarketplaceStore((state) => state.addFeedEvent);
   const [step, setStep] = useState<Step>(1);
   const [dataType, setDataType] = useState<DataType>("ETH/USD");
   const [budget, setBudget] = useState("10");
   const [urgency, setUrgency] = useState<Urgency>("medium");
   const spawn = useSpawnAgent();
+  const budgetWei = useMemo(() => {
+    try {
+      return parseEther(budget || "0").toString();
+    } catch {
+      return undefined;
+    }
+  }, [budget]);
 
   const persistAgent = (agent: LocalConsumerAgent) => {
     if (typeof window === "undefined") return;
-    const key = "agentmarket:consumer-agents";
+    const key = "agora:consumer-agents";
     const raw = window.localStorage.getItem(key);
     const existing = raw ? ((JSON.parse(raw) as LocalConsumerAgent[])) : [];
     const next = [agent, ...existing.filter((item) => item.address !== agent.address)].slice(0, 50);
     window.localStorage.setItem(key, JSON.stringify(next));
-    window.dispatchEvent(new Event("agentmarket:agents-updated"));
+    window.dispatchEvent(new Event("agora:agents-updated"));
   };
 
   const liveAuction = useMemo(() => {
@@ -58,24 +73,76 @@ export function SpawnWizard() {
       )[0];
   }, [auctions, dataType]);
 
-  const recommendation = useMemo(() => {
-    if (!liveAuction) return null;
-    const current = BigInt(liveAuction.currentPrice);
-    const floor = BigInt(liveAuction.floorPrice);
-    const budgetWei = parseEther(budget || "0");
-    if (budgetWei < floor) return null;
-    const affordableCap = budgetWei < current ? budgetWei : current;
-    const span = affordableCap - floor;
-    const urgencyBps =
-      urgency === "low" ? 0n : urgency === "medium" ? 5000n : 10000n;
-    const suggested = floor + (span * urgencyBps) / 10000n;
+  const plan = useConsumerPlan({
+    auctionId: liveAuction?.id,
+    budgetWei,
+    urgency,
+    targetDataType: dataType,
+  });
 
-    return {
-      thresholdWei: suggested,
-      thresholdStt: formatStt(suggested),
-      affordableCap,
-    };
-  }, [budget, liveAuction, urgency]);
+  const baselineThresholdWei = useMemo(() => {
+    if (!liveAuction || !budgetWei) return undefined;
+    try {
+      const floor = BigInt(liveAuction.floorPrice);
+      const current = BigInt(liveAuction.currentPrice);
+      const budgetCap = BigInt(budgetWei);
+      const affordableCap = current < budgetCap ? current : budgetCap;
+      if (affordableCap < floor) return undefined;
+      if (urgency === "low") return floor.toString();
+      if (urgency === "high") return affordableCap.toString();
+      return (floor + (affordableCap - floor) / 2n).toString();
+    } catch {
+      return undefined;
+    }
+  }, [budgetWei, liveAuction, urgency]);
+
+  const aiDeltaWei = useMemo(() => {
+    if (!plan.data || !baselineThresholdWei) return undefined;
+    try {
+      return (
+        BigInt(plan.data.snapThresholdWei) - BigInt(baselineThresholdWei)
+      ).toString();
+    } catch {
+      return undefined;
+    }
+  }, [baselineThresholdWei, plan.data]);
+
+  const recommendationMessage = useMemo(() => {
+    let parsedBudget = 0n;
+    try {
+      parsedBudget = parseEther(budget || "0");
+    } catch {
+      return "Enter a valid STT budget.";
+    }
+
+    if (!liveAuction) {
+      return `No live ${dataType} auction exists right now.`;
+    }
+
+    const floor = BigInt(liveAuction.floorPrice);
+    if (parsedBudget < floor) {
+      return `Your budget is below the current ${dataType} floor price of ${formatStt(floor)} STT.`;
+    }
+
+    if (plan.error) {
+      return plan.error.message;
+    }
+
+    return null;
+  }, [budget, dataType, liveAuction, plan.error]);
+
+  useEffect(() => {
+    if (!plan.data || !liveAuction) return;
+    addFeedEvent({
+      id: `ai-planned-${liveAuction.id}-${urgency}-${budgetWei}-${plan.data.snapThresholdWei}`,
+      kind: "ai-planned",
+      title: "AI Planned Threshold",
+      description: `${dataType} auction #${liveAuction.id} planned at ${formatStt(plan.data.snapThresholdWei)} STT using ${plan.data.model}.`,
+      timestamp: Date.now(),
+      auctionId: liveAuction.id,
+      actorLabel: "Agora Planner",
+    });
+  }, [addFeedEvent, budgetWei, dataType, liveAuction, plan.data, urgency]);
 
   const handleDeploy = async () => {
     if (!liveAuction) return;
@@ -93,11 +160,26 @@ export function SpawnWizard() {
       persistAgent({
         owner: address ?? "0x0000000000000000000000000000000000000000",
         address: result.consumerHandlerAddress,
+        auctionId: liveAuction.id,
         dataType,
+        model: result.model,
+        urgency,
         thresholdWei: result.snapThresholdWei,
+        baselineThresholdWei,
         budgetWei: result.budgetWei,
         rationale: result.rationale,
         deployedAt: Date.now(),
+      });
+      addFeedEvent({
+        id: `consumer-deployed-${result.consumerHandlerAddress}`,
+        kind: "consumer-deployed",
+        title: "Consumer Agent Deployed",
+        description: `${dataType} consumer deployed at ${shortenAddress(result.consumerHandlerAddress)} for auction #${liveAuction.id}.`,
+        timestamp: Date.now(),
+        txHash: result.transactionHash,
+        auctionId: liveAuction.id,
+        actorAddress: result.consumerHandlerAddress,
+        actorLabel: "Consumer Agent",
       });
       setStep(4);
     } catch {
@@ -133,8 +215,8 @@ export function SpawnWizard() {
               Deploy Your Consumer Agent
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Configure a consumer that watches live auctions and deploys a
-              `ConsumerHandler` contract through the marketplace API.
+              Configure a consumer that watches live Agora auctions and deploys
+              a `ConsumerHandler` contract through the Agora API wallet.
             </p>
           </div>
 
@@ -190,26 +272,45 @@ export function SpawnWizard() {
 
             <div className="rounded-[1.5rem] border border-border bg-background p-4">
               <p className="text-xs uppercase tracking-[0.22em] text-muted">
-                Deterministic planner
+                AI planner
               </p>
-              {recommendation ? (
+              {plan.data ? (
                 <div className="mt-3 space-y-2">
                   <p className="text-sm text-foreground">
-                    The API will deploy your consumer with a threshold of{" "}
+                    Agora recommends a threshold of{" "}
                     <span className="font-mono">
-                      {recommendation.thresholdStt} STT
+                      {formatStt(plan.data.snapThresholdWei)} STT
                     </span>{" "}
-                    using the live floor, current auction price, your budget,
-                    and <span className="font-mono">{urgencyLabel(urgency).toLowerCase()}</span> urgency.
+                    for this {dataType} auction.
+                  </p>
+                  <p className="text-xs leading-6 text-muted">
+                    {plan.data.rationale}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-muted">
+                    Strategy: {strategyLabel(urgency)}
                   </p>
                   <p className="text-xs text-muted">
-                    Affordable cap: {formatStt(recommendation.affordableCap)} STT
+                    Model: {plan.data.model}
                   </p>
+                  {baselineThresholdWei ? (
+                    <p className="text-xs text-muted">
+                      Rule baseline: {formatStt(baselineThresholdWei)} STT
+                    </p>
+                  ) : null}
+                  {aiDeltaWei ? (
+                    <p className="text-xs text-muted">
+                      AI delta: {BigInt(aiDeltaWei) >= 0n ? "+" : ""}
+                      {formatStt(aiDeltaWei)} STT
+                    </p>
+                  ) : null}
                 </div>
+              ) : plan.isLoading ? (
+                <p className="mt-3 text-sm text-muted">
+                  Calling the AI planner...
+                </p>
               ) : (
                 <p className="mt-3 text-sm text-muted">
-                  No usable {dataType} auction found yet, or the budget is below
-                  the current auction floor.
+                  {recommendationMessage}
                 </p>
               )}
             </div>
@@ -233,8 +334,8 @@ export function SpawnWizard() {
               Review Deployment
             </h2>
             <p className="mt-2 text-sm text-muted">
-              Review the contract funding and the current live auction target
-              before deploying.
+              Review the contract funding and the current live Agora auction
+              target before deploying.
             </p>
           </div>
 
@@ -259,6 +360,18 @@ export function SpawnWizard() {
                 {liveAuction ? `${formatStt(liveAuction.currentPrice)} STT` : "—"}
               </span>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted">AI threshold</span>
+              <span className="font-mono text-foreground">
+                {plan.data ? `${formatStt(plan.data.snapThresholdWei)} STT` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Rule baseline</span>
+              <span className="font-mono text-foreground">
+                {baselineThresholdWei ? `${formatStt(baselineThresholdWei)} STT` : "—"}
+              </span>
+            </div>
           </div>
 
           <div className="rounded-[1.5rem] border border-border bg-background p-5 text-sm">
@@ -266,11 +379,16 @@ export function SpawnWizard() {
               Your agent will autonomously
             </p>
             <ul className="mt-3 space-y-2 text-foreground">
-              <li>Watch all {dataType} auctions</li>
-              <li>Snap when price reaches the API planner threshold</li>
+              <li>Watch live {dataType} auctions on Agora</li>
+              <li>Snap when price reaches the AI-selected threshold</li>
               <li>Pay from the configured STT budget</li>
               <li>Receive verified price data on-chain</li>
             </ul>
+            {plan.data?.rationale ? (
+              <p className="mt-4 border-t border-border pt-4 leading-6 text-muted">
+                {plan.data.rationale}
+              </p>
+            ) : null}
           </div>
 
           {spawn.error ? (
@@ -283,7 +401,10 @@ export function SpawnWizard() {
             <Button variant="outline" onClick={() => setStep(1)}>
               Back
             </Button>
-            <Button onClick={handleDeploy} disabled={spawn.isPending || !liveAuction}>
+            <Button
+              onClick={handleDeploy}
+              disabled={spawn.isPending || !liveAuction || !plan.data}
+            >
               Deploy Agent
             </Button>
           </div>
@@ -298,7 +419,7 @@ export function SpawnWizard() {
           <div className="space-y-3 rounded-[1.5rem] border border-border bg-background p-5 text-sm">
             <div className="flex items-center justify-between">
               <span>Calling planner...</span>
-              <span>{spawn.isPending ? "⟳" : "✓"}</span>
+              <span>{spawn.isPending ? "⟳" : plan.data ? "✓" : "…"}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Deploying ConsumerHandler...</span>
@@ -319,7 +440,7 @@ export function SpawnWizard() {
               Your agent is live
             </h2>
             <p className="mt-2 text-sm text-muted">
-              Consumer deployment completed through the marketplace API.
+              Consumer deployment completed through the Agora API.
             </p>
           </div>
 
@@ -361,13 +482,21 @@ export function SpawnWizard() {
               <div className="flex items-center justify-between">
                 <span>Budget</span>
                 <span className="font-mono text-foreground">
-                  {formatStt(spawn.data.budgetWei)} STT
+                {formatStt(spawn.data.budgetWei)} STT
                 </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Planner model</span>
+                <span className="text-foreground">{spawn.data.model}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Strategy</span>
+                <span className="text-foreground">{strategyLabel(urgency)}</span>
               </div>
             </div>
             <p className="mt-4 text-xs leading-6 text-muted">
-              This contract is deployed by the marketplace API wallet in the
-              current backend implementation.
+              This contract is deployed by the Agora API wallet in the current
+              backend implementation.
             </p>
             {spawn.data.rationale ? (
               <p className="mt-3 font-mono text-xs leading-6 text-muted">

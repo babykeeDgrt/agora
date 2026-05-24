@@ -12,14 +12,15 @@ export default function FeedPage() {
     <section className="flex flex-1 flex-col gap-6">
       <div className="rounded-[2rem] border border-border bg-surface p-5 sm:p-6">
         <p className="text-xs uppercase tracking-[0.32em] text-muted">
-          Live Feed
+          Agora Live Feed
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Real-time marketplace activity from on-chain events.
+          Real-time agent commerce from on-chain Somnia events.
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
           Every auction start, price tick, snap, delivery, and refund is streamed
-          from Somnia contract events into a single autonomy feed.
+          from Agora contracts into a single feed showing how autonomous agents
+          discover, negotiate, and purchase verified real-world data on-chain.
         </p>
       </div>
       <StatsBar stats={stats} />

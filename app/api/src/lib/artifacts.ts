@@ -18,6 +18,9 @@ function loadArtifact(relativePath: string): Artifact {
 export const dutchAuctionArtifact = loadArtifact(
     "../../contracts/out/DutchAuction.sol/DutchAuction.json",
 );
+export const serviceRegistryArtifact = loadArtifact(
+    "../../contracts/out/ServiceRegistry.sol/ServiceRegistry.json",
+);
 export const consumerHandlerArtifact = loadArtifact(
     "../../contracts/out/ConsumerHandler.sol/ConsumerHandler.json",
 );

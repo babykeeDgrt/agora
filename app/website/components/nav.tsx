@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
@@ -26,9 +27,18 @@ export function Nav() {
         <div className="flex items-center gap-4">
           <Link
             href="/"
-            className="text-sm font-semibold uppercase tracking-[0.28em] text-foreground"
+            className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.28em] text-foreground"
           >
-            AgentMarket
+            <span className="relative size-8 overflow-hidden rounded-full border border-border bg-surface">
+              <Image
+                src="/agora_logo.jpg"
+                alt="Agora logo"
+                fill
+                className="object-cover"
+                sizes="32px"
+              />
+            </span>
+            Agora
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {links.map((link) => {

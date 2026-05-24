@@ -14,7 +14,12 @@ const filters: FilterKey[] = ["ALL", "SNAPS", "DELIVERIES", "REFUNDS"];
 function matchesFilter(filter: FilterKey, event: FeedEvent) {
   if (filter === "ALL") return true;
   if (filter === "SNAPS") {
-    return event.kind === "auction-snapped" || event.kind === "price-tick";
+    return (
+      event.kind === "auction-snapped" ||
+      event.kind === "price-tick" ||
+      event.kind === "ai-planned" ||
+      event.kind === "consumer-deployed"
+    );
   }
   if (filter === "DELIVERIES") return event.kind === "data-delivered";
   return event.kind === "payment-refunded";

@@ -13,17 +13,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useMarketplaceStore } from "@/store/marketplace";
 
 const defaults = {
-  "ETH/USD": {
-    apiUrl:
-      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-    jsonSelector: "ethereum.usd",
-  },
   "BTC/USD": {
     apiUrl:
       "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
     jsonSelector: "bitcoin.usd",
+  },
+  "ETH/USD": {
+    apiUrl:
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+    jsonSelector: "ethereum.usd",
   },
   "SOL/USD": {
     apiUrl:
@@ -33,42 +34,43 @@ const defaults = {
 } as const;
 
 type DataType = keyof typeof defaults;
-interface CreateAuctionPayload {
-  dataType: DataType;
-  apiUrl: string;
-  jsonSelector: string;
-  decimals: number;
-  startPrice: string;
-  floorPrice: string;
-  priceStep: string;
-  timeoutBlocks: string;
-}
 
-export function StartAuctionModal() {
+export function RegisterServiceModal() {
   const [open, setOpen] = useState(false);
-  const [dataType, setDataType] = useState<DataType>("ETH/USD");
-  const [apiUrl, setApiUrl] = useState<string>(defaults["ETH/USD"].apiUrl);
+  const [dataType, setDataType] = useState<DataType>("BTC/USD");
+  const [apiUrl, setApiUrl] = useState<string>(defaults["BTC/USD"].apiUrl);
   const [jsonSelector, setJsonSelector] = useState<string>(
-    defaults["ETH/USD"].jsonSelector,
+    defaults["BTC/USD"].jsonSelector,
   );
-  const [startPrice, setStartPrice] = useState("10");
-  const [floorPrice, setFloorPrice] = useState("1");
-  const [priceStep, setPriceStep] = useState("0.5");
-  const [duration, setDuration] = useState("120");
+  const [decimals, setDecimals] = useState("8");
+  const [pricePerRequest, setPricePerRequest] = useState("2");
+  const [timeoutBlocks, setTimeoutBlocks] = useState("1000");
   const queryClient = useQueryClient();
-  const createAuction = useMutation({
-    mutationFn: (payload: CreateAuctionPayload) => api.createAuction(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["auctions"] });
-      await queryClient.invalidateQueries({ queryKey: ["health"] });
+  const addFeedEvent = useMarketplaceStore((state) => state.addFeedEvent);
+  const registerService = useMutation({
+    mutationFn: async () =>
+      api.registerService({
+        dataType,
+        apiUrl,
+        jsonSelector,
+        decimals: Number(decimals),
+        pricePerRequest: `${BigInt(Math.round(Number(pricePerRequest) * 10_000)) * 10n ** 14n}`,
+        timeoutBlocks,
+      }),
+    onSuccess: async (result) => {
+      addFeedEvent({
+        id: `${result.transactionHash}-register-service-local`,
+        kind: "service-registered",
+        title: "ServiceRegistered",
+        description: `${dataType} service #${result.serviceId} submitted on-chain`,
+        timestamp: Date.now(),
+        txHash: result.transactionHash,
+        serviceId: result.serviceId,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["services"] });
       setOpen(false);
     },
   });
-
-  const pending = createAuction.isPending;
-  const helperText = pending
-    ? "Submitting through the Agora API wallet."
-    : "This calls the Agora API, which creates the auction on-chain from the configured Agora provider wallet.";
 
   const handleDataType = (nextType: DataType) => {
     setDataType(nextType);
@@ -76,34 +78,20 @@ export function StartAuctionModal() {
     setJsonSelector(defaults[nextType].jsonSelector);
   };
 
-  const handleSubmit = async () => {
-    const { parseEther } = await import("viem");
-    try {
-      await createAuction.mutateAsync({
-        dataType,
-        apiUrl,
-        jsonSelector,
-        decimals: 8,
-        startPrice: parseEther(startPrice).toString(),
-        floorPrice: parseEther(floorPrice).toString(),
-        priceStep: parseEther(priceStep).toString(),
-        timeoutBlocks: duration,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Start Auction</Button>
+        <Button>Register Service</Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Start Auction</DialogTitle>
-          <DialogDescription>{helperText}</DialogDescription>
+          <DialogTitle>Register Service</DialogTitle>
+          <DialogDescription>
+            Persist a fixed-price data service that can fulfill unlimited
+            requests without relisting.
+          </DialogDescription>
         </DialogHeader>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 sm:col-span-2">
             <span className="text-sm text-muted">Data Type</span>
@@ -144,37 +132,28 @@ export function StartAuctionModal() {
           </label>
 
           <label className="grid gap-2">
-            <span className="text-sm text-muted">Start Price (STT)</span>
+            <span className="text-sm text-muted">Decimals</span>
             <input
-              value={startPrice}
-              onChange={(event) => setStartPrice(event.target.value)}
+              value={decimals}
+              onChange={(event) => setDecimals(event.target.value)}
               className="h-12 rounded-2xl border border-border bg-background px-4 text-sm outline-none"
             />
           </label>
 
           <label className="grid gap-2">
-            <span className="text-sm text-muted">Floor Price (STT)</span>
+            <span className="text-sm text-muted">Price Per Request (STT)</span>
             <input
-              value={floorPrice}
-              onChange={(event) => setFloorPrice(event.target.value)}
+              value={pricePerRequest}
+              onChange={(event) => setPricePerRequest(event.target.value)}
               className="h-12 rounded-2xl border border-border bg-background px-4 text-sm outline-none"
             />
           </label>
 
-          <label className="grid gap-2">
-            <span className="text-sm text-muted">Price Step (STT per tick)</span>
+          <label className="grid gap-2 sm:col-span-2">
+            <span className="text-sm text-muted">Timeout (blocks)</span>
             <input
-              value={priceStep}
-              onChange={(event) => setPriceStep(event.target.value)}
-              className="h-12 rounded-2xl border border-border bg-background px-4 text-sm outline-none"
-            />
-          </label>
-
-          <label className="grid gap-2">
-            <span className="text-sm text-muted">Duration (blocks)</span>
-            <input
-              value={duration}
-              onChange={(event) => setDuration(event.target.value)}
+              value={timeoutBlocks}
+              onChange={(event) => setTimeoutBlocks(event.target.value)}
               className="h-12 rounded-2xl border border-border bg-background px-4 text-sm outline-none"
             />
           </label>
@@ -184,13 +163,16 @@ export function StartAuctionModal() {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={pending}>
-            {pending ? "Starting..." : "Start Auction"}
+          <Button
+            onClick={() => registerService.mutate()}
+            disabled={registerService.isPending}
+          >
+            {registerService.isPending ? "Registering..." : "Register Service"}
           </Button>
         </div>
-        {createAuction.error ? (
+        {registerService.error ? (
           <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted">
-            {createAuction.error.message}
+            {registerService.error.message}
           </div>
         ) : null}
       </DialogContent>
