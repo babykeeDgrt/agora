@@ -10,8 +10,12 @@ import type { Auction } from "@/store/marketplace";
 export interface LocalConsumerAgent {
   owner?: string;
   address: string;
+  auctionId?: string;
   dataType: string;
+  model?: string;
+  urgency?: "low" | "medium" | "high";
   thresholdWei: string;
+  baselineThresholdWei?: string;
   budgetWei: string;
   rationale?: string;
   deployedAt: number;
@@ -49,7 +53,7 @@ export function MyAgentsTable({
             Local Consumer Deployments
           </p>
           <h3 className="mt-3 text-xl font-semibold tracking-tight">
-            Browser-tracked API deployments
+            Browser-tracked Agora API deployments
           </h3>
         </div>
         <div className="space-y-3">
@@ -75,6 +79,14 @@ export function MyAgentsTable({
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.22em] text-muted">
                       {agent.dataType}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-muted">
+                      Auction
+                    </p>
+                    <p className="mt-1 font-mono text-sm text-foreground">
+                      {agent.auctionId ? `#${agent.auctionId}` : "—"}
                     </p>
                   </div>
                   <div>
@@ -121,8 +133,23 @@ export function MyAgentsTable({
                     {agent.rationale ? (
                       <p className="mt-3 leading-6">{agent.rationale}</p>
                     ) : null}
+                    {agent.model ? (
+                      <p className="mt-3 text-xs uppercase tracking-[0.22em] text-muted">
+                        Model: {agent.model}
+                      </p>
+                    ) : null}
+                    {agent.urgency ? (
+                      <p className="mt-2 text-xs uppercase tracking-[0.22em] text-muted">
+                        Urgency: {agent.urgency}
+                      </p>
+                    ) : null}
+                    {agent.baselineThresholdWei ? (
+                      <p className="mt-2 text-xs uppercase tracking-[0.22em] text-muted">
+                        Rule baseline: {formatStt(agent.baselineThresholdWei)} STT
+                      </p>
+                    ) : null}
                     <p className="mt-3 text-xs uppercase tracking-[0.22em] text-muted">
-                      Owner on-chain: marketplace API wallet
+                      Owner on-chain: Agora API wallet
                     </p>
                   </div>
                 ) : null}
@@ -131,7 +158,8 @@ export function MyAgentsTable({
           })}
           {localAgents.length === 0 ? (
             <div className="rounded-[1.5rem] border border-border bg-background px-4 py-6 text-sm text-muted">
-              No consumer agents tracked in this browser yet. Deploy one from the Spawn Agent page.
+              No consumer agents tracked in this browser yet. Deploy one from the
+              Spawn Agent page.
             </div>
           ) : null}
         </div>
@@ -140,10 +168,10 @@ export function MyAgentsTable({
       <div className="rounded-[2rem] border border-border bg-surface p-5">
         <div className="mb-6">
           <p className="text-xs uppercase tracking-[0.24em] text-muted">
-            Marketplace API Auctions
+            Agora API Auctions
           </p>
           <h3 className="mt-3 text-xl font-semibold tracking-tight">
-            Auctions created through the backend wallet
+            Auctions created through the Agora backend wallet
           </h3>
         </div>
         {apiWalletAddress ? (
@@ -181,7 +209,7 @@ export function MyAgentsTable({
           ))}
           {apiWalletAuctions.length === 0 ? (
             <div className="rounded-[1.5rem] border border-border bg-background px-4 py-6 text-sm text-muted">
-              No backend-created provider auctions found yet.
+              No Agora backend-created provider auctions found yet.
             </div>
           ) : null}
         </div>

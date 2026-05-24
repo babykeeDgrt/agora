@@ -49,6 +49,29 @@ function extractAuctionId(event: { args?: unknown[] | Record<string, unknown> })
   throw new Error("AuctionSnapped event did not include auctionId");
 }
 
+function extractServiceRequestEvent(
+  event: { args?: unknown[] | Record<string, unknown> },
+): { requestId: bigint; serviceId: bigint } {
+  if (Array.isArray(event.args) && event.args[0] !== undefined && event.args[1] !== undefined) {
+    return {
+      requestId: asBigInt(event.args[0]),
+      serviceId: asBigInt(event.args[1]),
+    };
+  }
+
+  if (event.args && typeof event.args === "object") {
+    const args = event.args as Record<string, unknown>;
+    if (args.requestId !== undefined && args.serviceId !== undefined) {
+      return {
+        requestId: asBigInt(args.requestId),
+        serviceId: asBigInt(args.serviceId),
+      };
+    }
+  }
+
+  throw new Error("DataRequested event did not include requestId and serviceId");
+}
+
 async function ensureAgentIdentity(
   config: AppConfig,
   signer: ethers.Wallet | ethers.Signer,
@@ -114,9 +137,9 @@ async function ensureAgentIdentity(
   return { runtimeAgent, agentId: createdAgentId };
 }
 
-async function computeFulfillmentDeposit(
+async function computeAuctionFulfillmentDeposit(
   dataProvider: Awaited<ReturnType<typeof createRuntimeContracts>>["dataProvider"],
-  platform: Awaited<ReturnType<typeof createRuntimeContracts>>["platform"],
+  platform: Awaited<ReturnType<typeof createRuntimeContracts>>["auctionPlatform"],
 ): Promise<bigint> {
   const reserve = (await platform.getRequestDeposit()) as bigint;
   const perAgentExecutionCost = (await dataProvider.PER_AGENT_EXECUTION_COST()) as bigint;
@@ -125,9 +148,25 @@ async function computeFulfillmentDeposit(
   return reserve + perAgentExecutionCost * subcommitteeSize;
 }
 
+async function computeServiceFulfillmentDeposit(
+  serviceRegistry: Awaited<ReturnType<typeof createRuntimeContracts>>["serviceRegistry"],
+  platform: Awaited<ReturnType<typeof createRuntimeContracts>>["servicePlatform"],
+): Promise<bigint> {
+  const reserve = (await platform.getRequestDeposit()) as bigint;
+  const perAgentExecutionCost = (await serviceRegistry.PER_AGENT_EXECUTION_COST()) as bigint;
+  const subcommitteeSize = (await serviceRegistry.SUBCOMMITTEE_SIZE()) as bigint;
+
+  return reserve + perAgentExecutionCost * subcommitteeSize;
+}
+
 export async function runProviderAgent(config: AppConfig): Promise<void> {
   const runtime = await createRuntimeContracts(config);
   const signerAddress = (await runtime.provider.getAddress()).toLowerCase();
+  const ownedServiceIds = new Set(
+    ((await runtime.serviceRegistry.getProviderServices(signerAddress)) as bigint[]).map((serviceId) =>
+      serviceId.toString(),
+    ),
+  );
 
   let identity: AgentIdentity | undefined;
   if (runtime.kit) {
@@ -158,7 +197,10 @@ export async function runProviderAgent(config: AppConfig): Promise<void> {
         return;
       }
 
-      const deposit = await computeFulfillmentDeposit(runtime.dataProvider, runtime.platform);
+      const deposit = await computeAuctionFulfillmentDeposit(
+        runtime.dataProvider,
+        runtime.auctionPlatform,
+      );
       const tx = await runtime.dataProvider.fulfillOrder(auctionId, { value: deposit });
       const receipt = await tx.wait();
 
@@ -194,28 +236,118 @@ export async function runProviderAgent(config: AppConfig): Promise<void> {
     }
   };
 
-  let trigger: OnChainTrigger | undefined;
-  let directListener: ((...args: unknown[]) => void) | undefined;
+  const handleServiceRequested = async (event: { args?: unknown[] | Record<string, unknown> }) => {
+    const { requestId, serviceId } = extractServiceRequestEvent(event);
+    const startedAt = now();
+
+    try {
+      if (!ownedServiceIds.has(serviceId.toString())) {
+        return;
+      }
+
+      const service = await runtime.serviceRegistry.getService(serviceId);
+      if (service.provider.toLowerCase() !== signerAddress) {
+        return;
+      }
+
+      const request = await runtime.serviceRegistry.getRequest(requestId);
+      if (request.agentRequestId !== 0n) {
+        console.log(`[provider] service request ${requestId.toString()} already submitted`);
+        return;
+      }
+
+      const deposit = await computeServiceFulfillmentDeposit(
+        runtime.serviceRegistry,
+        runtime.servicePlatform,
+      );
+      const tx = await runtime.serviceRegistry.fulfillRequest(requestId, {
+        value: deposit,
+      });
+      const receipt = await tx.wait();
+
+      console.log(
+        `[provider] fulfilled service request ${requestId.toString()} for service ${serviceId.toString()} in tx ${receipt?.hash ?? tx.hash} with deposit ${ethers.formatEther(deposit)} STT`,
+      );
+
+      if (runtime.kit && identity) {
+        const executionTimeMs = BigInt(Math.max(1, now() - startedAt));
+        const metricsTx = await runtime.kit.contracts.registry.recordExecution(
+          identity.agentId,
+          true,
+          executionTimeMs,
+        );
+        await metricsTx.wait();
+      }
+    } catch (error) {
+      console.error(
+        `[provider] failed to fulfill service request ${requestId.toString()} for service ${serviceId.toString()}: ${stringifyError(error)}`,
+      );
+
+      if (runtime.kit && identity) {
+        const executionTimeMs = BigInt(Math.max(1, now() - startedAt));
+        try {
+          const metricsTx = await runtime.kit.contracts.registry.recordExecution(
+            identity.agentId,
+            false,
+            executionTimeMs,
+          );
+          await metricsTx.wait();
+        } catch (metricsError) {
+          console.error(`[provider] failed to record execution metrics: ${stringifyError(metricsError)}`);
+        }
+      }
+    }
+  };
+
+  let auctionTrigger: OnChainTrigger | undefined;
+  let serviceTrigger: OnChainTrigger | undefined;
+  let directAuctionListener: ((...args: unknown[]) => void) | undefined;
+  let directServiceListener: ((...args: unknown[]) => void) | undefined;
 
   if (runtime.kit) {
-    trigger = new OnChainTrigger(runtime.kit.getChainClient(), runtime.dutchAuction, "AuctionSnapped");
-    await trigger.start(handleAuctionSnapped);
+    auctionTrigger = new OnChainTrigger(
+      runtime.kit.getChainClient(),
+      runtime.dutchAuction,
+      "AuctionSnapped",
+    );
+    serviceTrigger = new OnChainTrigger(
+      runtime.kit.getChainClient(),
+      runtime.serviceRegistry,
+      "DataRequested",
+    );
+    await auctionTrigger.start(handleAuctionSnapped);
+    await serviceTrigger.start(handleServiceRequested);
   } else {
-    directListener = async (...args: unknown[]) => {
+    directAuctionListener = async (...args: unknown[]) => {
       const event = args[args.length - 1];
       await handleAuctionSnapped(event as { args?: unknown[] | Record<string, unknown> });
     };
-    runtime.dutchAuction.on("AuctionSnapped", directListener);
+    directServiceListener = async (...args: unknown[]) => {
+      const event = args[args.length - 1];
+      await handleServiceRequested(event as { args?: unknown[] | Record<string, unknown> });
+    };
+    runtime.dutchAuction.on("AuctionSnapped", directAuctionListener);
+    runtime.serviceRegistry.on("DataRequested", directServiceListener);
   }
 
   console.log(`[provider] watching AuctionSnapped on ${config.dutchAuctionAddress}`);
+  console.log(`[provider] watching DataRequested on ${config.serviceRegistryAddress}`);
+  console.log(
+    `[provider] managing services: ${ownedServiceIds.size === 0 ? "none" : Array.from(ownedServiceIds).join(", ")}`,
+  );
 
   const stop = async () => {
-    if (trigger) {
-      await trigger.stop();
+    if (auctionTrigger) {
+      await auctionTrigger.stop();
     }
-    if (directListener) {
-      runtime.dutchAuction.off("AuctionSnapped", directListener);
+    if (serviceTrigger) {
+      await serviceTrigger.stop();
+    }
+    if (directAuctionListener) {
+      runtime.dutchAuction.off("AuctionSnapped", directAuctionListener);
+    }
+    if (directServiceListener) {
+      runtime.serviceRegistry.off("DataRequested", directServiceListener);
     }
     if (identity) {
       await identity.runtimeAgent.stop().catch(() => undefined);

@@ -5,12 +5,19 @@ import { explorerAddressLink, explorerTxLink, formatRelativeTime, shortenAddress
 import type { FeedEvent } from "@/store/marketplace";
 
 const icons: Record<FeedEvent["kind"], string> = {
+  "ai-planned": "∆",
+  "consumer-deployed": "□",
   "auction-started": "○",
   "price-tick": "•",
   "auction-snapped": "◉",
   "auction-expired": "×",
   "data-delivered": "◇",
   "payment-refunded": "↩",
+  "service-registered": "▣",
+  "service-requested": "→",
+  "service-delivered": "⬢",
+  "service-refunded": "↺",
+  "service-status-changed": "≋",
 };
 
 export function FeedEventRow({ event }: { event: FeedEvent }) {

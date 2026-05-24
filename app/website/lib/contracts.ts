@@ -5,6 +5,9 @@ export const addresses = {
   dataProvider:
     process.env.NEXT_PUBLIC_DATA_PROVIDER_ADDRESS ??
     "0x0000000000000000000000000000000000000000",
+  serviceRegistry:
+    process.env.NEXT_PUBLIC_SERVICE_REGISTRY_ADDRESS ??
+    "0x0000000000000000000000000000000000000000",
   escrow:
     process.env.NEXT_PUBLIC_ESCROW_ADDRESS ??
     "0x0000000000000000000000000000000000000000",
@@ -81,6 +84,58 @@ export const dataProviderAbi = [
       { indexed: true, name: "consumer", type: "address" },
       { indexed: false, name: "price", type: "uint256" },
       { indexed: false, name: "timestamp", type: "uint256" },
+    ],
+  },
+] as const;
+
+export const serviceRegistryAbi = [
+  {
+    type: "event",
+    name: "ServiceRegistered",
+    inputs: [
+      { indexed: true, name: "serviceId", type: "uint256" },
+      { indexed: true, name: "provider", type: "address" },
+      { indexed: false, name: "dataType", type: "string" },
+      { indexed: false, name: "pricePerRequest", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "ServiceStatusChanged",
+    inputs: [
+      { indexed: true, name: "serviceId", type: "uint256" },
+      { indexed: false, name: "newStatus", type: "uint8" },
+    ],
+  },
+  {
+    type: "event",
+    name: "DataRequested",
+    inputs: [
+      { indexed: true, name: "requestId", type: "uint256" },
+      { indexed: true, name: "serviceId", type: "uint256" },
+      { indexed: true, name: "consumer", type: "address" },
+      { indexed: false, name: "payment", type: "uint256" },
+      { indexed: false, name: "blockNumber", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "DataDelivered",
+    inputs: [
+      { indexed: true, name: "requestId", type: "uint256" },
+      { indexed: true, name: "serviceId", type: "uint256" },
+      { indexed: true, name: "consumer", type: "address" },
+      { indexed: false, name: "price", type: "uint256" },
+      { indexed: false, name: "timestamp", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "RequestRefunded",
+    inputs: [
+      { indexed: true, name: "requestId", type: "uint256" },
+      { indexed: false, name: "consumer", type: "address" },
+      { indexed: false, name: "payment", type: "uint256" },
     ],
   },
 ] as const;

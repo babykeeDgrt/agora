@@ -34,7 +34,7 @@ export function WalletButton({ fullWidth = false }: { fullWidth?: boolean }) {
           <DialogHeader>
             <DialogTitle>Wallet connected</DialogTitle>
             <DialogDescription>
-              Manage your active EVM wallet connection for AgentMarket.
+              Manage your active EVM wallet connection for Agora.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl border border-border bg-background px-4 py-3">

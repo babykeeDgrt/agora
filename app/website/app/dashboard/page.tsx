@@ -26,7 +26,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = () => {
       try {
-        const raw = window.localStorage.getItem("agentmarket:consumer-agents");
+        const raw = window.localStorage.getItem("agora:consumer-agents");
         setLocalAgents(raw ? (JSON.parse(raw) as LocalConsumerAgent[]) : []);
       } catch {
         setLocalAgents([]);
@@ -35,10 +35,10 @@ export default function DashboardPage() {
 
     load();
     window.addEventListener("storage", load);
-    window.addEventListener("agentmarket:agents-updated", load);
+    window.addEventListener("agora:agents-updated", load);
     return () => {
       window.removeEventListener("storage", load);
-      window.removeEventListener("agentmarket:agents-updated", load);
+      window.removeEventListener("agora:agents-updated", load);
     };
   }, []);
 
@@ -48,10 +48,10 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.32em] text-muted">
-              Dashboard
+              Agora Dashboard
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Marketplace throughput, provider performance, and local agent state.
+              Throughput, provider performance, and local autonomous agent state.
             </h1>
           </div>
           <div className="flex flex-wrap gap-2">

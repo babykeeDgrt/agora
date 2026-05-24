@@ -67,6 +67,8 @@ export function useMarketplaceStats() {
       totalVolumeWei,
       activeAgents: agentAddresses.size,
       avgDeliverySeconds,
+      aiPlansGenerated: feed.filter((event) => event.kind === "ai-planned")
+        .length,
     };
   }, [auctions, feed]);
 

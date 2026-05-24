@@ -15,15 +15,51 @@ import { createHealthRouter } from "./routes/health";
 import { createProviderRouter } from "./routes/provider";
 import { AuctionService } from "./services/auction-service";
 import { ConsumerService } from "./services/consumer-service";
+import { createServicesRouter } from "./routes/services";
+import { ServiceRegistryService } from "./services/service-registry-service";
+
+function isAllowedDevOrigin(origin: string): boolean {
+    if (
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:") ||
+        origin.startsWith("http://[::1]:")
+    ) {
+        return true;
+    }
+
+    return /^http:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+$/.test(
+        origin,
+    );
+}
 
 export function createApp(blockchain: BlockchainContext): Express {
     const app = express();
     const auctionService = new AuctionService(blockchain);
+    const serviceRegistryService = new ServiceRegistryService(blockchain);
     const consumerService = new ConsumerService(blockchain, auctionService);
+    const explicitOrigins = blockchain.env.webUrl
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
 
     app.use(
         cors({
-            origin: [blockchain.env.webUrl],
+            origin: (origin, callback) => {
+                if (!origin) {
+                    callback(null, true);
+                    return;
+                }
+
+                if (
+                    explicitOrigins.includes(origin) ||
+                    isAllowedDevOrigin(origin)
+                ) {
+                    callback(null, true);
+                    return;
+                }
+
+                callback(new Error(`Origin not allowed by CORS: ${origin}`));
+            },
             methods: ["GET", "POST"],
             allowedHeaders: ["Content-Type"],
         }),
@@ -40,6 +76,7 @@ export function createApp(blockchain: BlockchainContext): Express {
 
     app.use(createHealthRouter(blockchain));
     app.use(createAuctionRouter(auctionService));
+    app.use("/services", createServicesRouter(serviceRegistryService));
     app.use(createProviderRouter(auctionService));
     app.use(createConsumerRouter(consumerService));
 

@@ -8,11 +8,12 @@ export function StatsBar({ stats }: { stats: MarketplaceStats }) {
     { label: "Total Auctions", value: String(stats.totalAuctions) },
     { label: "Total Volume", value: `${formatStt(stats.totalVolumeWei)} STT` },
     { label: "Active Agents", value: String(stats.activeAgents) },
+    { label: "AI Plans", value: String(stats.aiPlansGenerated) },
     { label: "Avg Delivery", value: `${stats.avgDeliverySeconds}s` },
   ];
 
   return (
-    <div className="grid gap-3 rounded-[2rem] border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 rounded-[2rem] border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
       {items.map((item) => (
         <div
           key={item.label}

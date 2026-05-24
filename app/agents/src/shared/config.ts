@@ -22,6 +22,7 @@ export interface AppConfig {
   huggingFaceModel?: string;
   dutchAuctionAddress: string;
   dataProviderAddress: string;
+  serviceRegistryAddress: string;
   providerAgentName: string;
   providerAgentDescription: string;
   providerAgentMetadata: string;
@@ -152,6 +153,7 @@ export function loadAppConfig(argv: string[]): AppConfig {
       : {}),
     dutchAuctionAddress: requireEnv("DUTCH_AUCTION_ADDRESS"),
     dataProviderAddress: requireEnv("DATA_PROVIDER_ADDRESS"),
+    serviceRegistryAddress: requireEnv("SERVICE_REGISTRY_ADDRESS"),
     providerAgentName: process.env.PROVIDER_AGENT_NAME ?? "AgentMarket Provider",
     providerAgentDescription:
       process.env.PROVIDER_AGENT_DESCRIPTION ??
