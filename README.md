@@ -10,7 +10,7 @@ Agora is a novel, open marketplace where AI agents autonomously discover, negoti
 
 ## The Problem
 
-AI agents need real-world data to act. Today every solution involves trust: a centralised API, a third-party oracle, or an off-chain relay you have to believe. There is no permissionless primitive for agents to acquire verified data from each other on-chain.
+AI agents need real-world data to act. Today, many paths still involve trust: a centralized API, a third-party oracle, or an off-chain relay you have to believe. There is no clean permissionless primitive for agents to acquire verified data from each other on-chain.
 
 ## The Solution
 
@@ -40,7 +40,7 @@ Agora meets that bar because:
 
 - **It is genuinely agent-driven.** Agents do not just submit one transaction. They monitor on-chain events, make decisions, trigger settlement, invoke validator-backed data fetches, and react to delivery autonomously.
 - **It has real-world utility.** Any protocol or agent that needs live off-chain data can use Agora to acquire it without trusting a centralized oracle operator.
-- **It uses Somnia-native primitives directly.** Reactivity, Somnia Agents, AgentKit identity, and cheap/final fast execution are all essential to the system rather than cosmetic add-ons.
+- **It uses Somnia-native primitives directly.** Reactivity, Somnia Agents, AgentKit identity, and low-cost fast execution are all essential to the system rather than cosmetic add-ons.
 - **It solves a real market design problem.** Auctions are right when price discovery matters. Services are right when repeatability and low friction matter. The protocol supports both.
 
 ---
@@ -72,7 +72,7 @@ Agora uses four Somnia-native primitives together. Remove any one and the protoc
 | **Somnia Agents** | `DataProvider` and `ServiceRegistry` call `platform.createRequest()` with live API metadata. Three validators fetch independently, reach consensus, and callback on-chain. | Eliminates trusted oracles entirely. Data is verified by the network, not a third party. |
 | **Somnia Reactivity** | `AuctionClock` subscribes to `BlockTick` — self-driving price drops every block. `ConsumerHandler` subscribes to `PriceTick` — autonomous snap when threshold hit. Provider agents watch auction snaps and service requests in real time. | No keepers. No bots. The market mechanics are embedded in the chain and its agent runtime. |
 | **Somnia AgentKit** | Provider and consumer agents use AgentKit's `OnChainTrigger`, `Agent` registry identity, and execution metrics. | On-chain agent identity and reputation for every marketplace participant. |
-| **Sub-second finality + sub-cent fees** | Price ticks every block. Micro-payments in STT. The full loop completes in under 60 seconds. | Makes real-time autonomous agent commerce economically viable. Nothing like this works on Ethereum. |
+| **Fast finality + low fees** | Price ticks every block. Micro-payments in STT. The full loop can complete quickly enough for interactive agent workflows. | Makes real-time autonomous agent commerce economically viable. This is far less practical on slower, more expensive networks. |
 
 ---
 
@@ -193,6 +193,7 @@ app/
 | Contract | Address | Explorer |
 |----------|---------|---------|
 | DutchAuction | `0xefc0C84206855A6319ceF167f4a8B734810e13d9` | [View](https://shannon-explorer.somnia.network/address/0xefc0C84206855A6319ceF167f4a8B734810e13d9) |
+| AuctionClock | `0x3fA90166FB9b848df932FB3F41Ff048a4a3c4038` | [View](https://shannon-explorer.somnia.network/address/0x3fA90166FB9b848df932FB3F41Ff048a4a3c4038) |
 | DataProvider | `0x4D3047514E146f41033071e81F25A01eB016f762` | [View](https://shannon-explorer.somnia.network/address/0x4D3047514E146f41033071e81F25A01eB016f762) |
 | Escrow | `0x8872f70DF76061728Dba2De51EEF124A0df04c7a` | [View](https://shannon-explorer.somnia.network/address/0x8872f70DF76061728Dba2De51EEF124A0df04c7a) |
 | ServiceRegistry | `0x287e6060c3B7a35CE7Bc2c1154dEf7567cBc78c1` | [View](https://shannon-explorer.somnia.network/address/0x287e6060c3B7a35CE7Bc2c1154dEf7567cBc78c1) |
@@ -347,6 +348,8 @@ PRIVATE_KEY=0x... \
 make deploy-testnet-core
 ```
 
+The current verified Somnia testnet addresses are also listed in `contracts/deployments/testnet.env`.
+
 ### 3. Start the API
 
 ```bash
@@ -386,6 +389,7 @@ pnpm install && pnpm dev
 | `HUGGINGFACE_MODEL` | No | Default: `Qwen/Qwen3-32B` |
 | `DUTCH_AUCTION_ADDRESS` | Yes | Deployed DutchAuction address |
 | `DATA_PROVIDER_ADDRESS` | Yes | Deployed DataProvider address |
+| `SERVICE_REGISTRY_ADDRESS` | Yes | Deployed ServiceRegistry address |
 | `CONSUMER_AUCTION_ID` | Consumer only | Target auction ID |
 | `CONSUMER_URGENCY` | Consumer only | `low` \| `medium` \| `high` |
 | `CONSUMER_BUDGET_WEI` | No | STT budget in wei. Defaults to current auction price |
@@ -400,6 +404,7 @@ pnpm install && pnpm dev
 | `HUGGINGFACE_API_KEY` | Yes | For consumer planner service |
 | `DUTCH_AUCTION_ADDRESS` | Yes | Deployed DutchAuction address |
 | `DATA_PROVIDER_ADDRESS` | Yes | Deployed DataProvider address |
+| `SERVICE_REGISTRY_ADDRESS` | Yes | Deployed ServiceRegistry address |
 | `WEB_URL` | Yes | Frontend URL (for CORS) |
 
 ### `app/website/.env.local`
@@ -410,6 +415,7 @@ pnpm install && pnpm dev
 | `NEXT_PUBLIC_WS_URL` | Somnia WebSocket RPC (`wss://dream-rpc.somnia.network`) |
 | `NEXT_PUBLIC_DUTCH_AUCTION_ADDRESS` | DutchAuction contract address |
 | `NEXT_PUBLIC_DATA_PROVIDER_ADDRESS` | DataProvider contract address |
+| `NEXT_PUBLIC_SERVICE_REGISTRY_ADDRESS` | ServiceRegistry contract address |
 | `NEXT_PUBLIC_ESCROW_ADDRESS` | Escrow contract address |
 | `NEXT_PUBLIC_EXPLORER_URL` | Block explorer base URL |
 
@@ -446,7 +452,7 @@ cd app/website && pnpm dev
 | Reactivity | `@somnia-chain/reactivity-contracts` — `SomniaEventHandler`, `SomniaExtensions` |
 | Agent runtime | TypeScript, `somnia-agent-kit`, ethers.js |
 | AI planner | Hugging Face Inference API, `Qwen/Qwen3-32B` |
-| API | Express, TypeScript, viem |
+| API | Express, TypeScript, ethers.js |
 | Frontend | Next.js 16, wagmi, viem, Zustand, TanStack Query, Tailwind, recharts |
 | Chain | Somnia Testnet — Chain ID 50312, RPC `https://dream-rpc.somnia.network` |
 
