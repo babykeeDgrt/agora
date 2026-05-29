@@ -1,7 +1,7 @@
 import { Interface, type ContractTransactionReceipt, type Log } from "ethers";
 
+import { serviceRegistryAbi } from "../config/serviceRegistryAbi";
 import type { BlockchainContext } from "../lib/blockchain";
-import { serviceRegistryArtifact } from "../lib/artifacts";
 import { HttpError } from "../lib/http";
 
 const serviceStatusLabels = ["Active", "Paused", "Deactivated"] as const;
@@ -50,7 +50,7 @@ export class ServiceRegistryService {
     private readonly serviceRegistryInterface: Interface;
 
     constructor(private readonly blockchain: BlockchainContext) {
-        this.serviceRegistryInterface = new Interface(serviceRegistryArtifact.abi);
+        this.serviceRegistryInterface = new Interface(serviceRegistryAbi);
     }
 
     async listActiveServices(): Promise<ServiceView[]> {

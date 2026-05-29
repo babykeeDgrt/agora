@@ -1,5 +1,8 @@
+import { ContractFactory } from "ethers";
+
+import { consumerHandlerAbi } from "../config/consumerHandlerAbi";
+import { consumerHandlerBytecode } from "../config/consumerHandlerBytecode";
 import type { BlockchainContext } from "../lib/blockchain";
-import { deployConsumerHandlerViaForge } from "../lib/forge";
 import { HttpError } from "../lib/http";
 import { AuctionService, type AuctionView } from "./auction-service";
 import {
@@ -69,22 +72,32 @@ export class ConsumerService {
       input.budgetWei + this.blockchain.env.consumerSubscriptionReserveWei;
     const targetDataType = input.targetDataType ?? auction.dataType;
 
-    const deployment = await deployConsumerHandlerViaForge(
-      this.blockchain.env,
+    const factory = new ContractFactory(
+      consumerHandlerAbi,
+      consumerHandlerBytecode,
+      this.blockchain.wallet,
+    );
+    const consumerHandler = await factory.deploy(
+      this.blockchain.env.dutchAuctionAddress,
+      this.blockchain.env.dataProviderAddress,
       snapThresholdWei,
       targetDataType,
-      deployValue,
+      this.blockchain.env.consumerHandlerGasLimit,
+      { value: deployValue },
     );
 
-    const receipt = await this.blockchain.provider.getTransactionReceipt(
-      deployment.transactionHash,
-    );
+    const deploymentTx = consumerHandler.deploymentTransaction();
+    if (!deploymentTx) {
+      throw new Error("Missing ConsumerHandler deployment transaction");
+    }
+
+    const receipt = await deploymentTx.wait();
     if (!receipt) {
       throw new Error("Missing transaction receipt for ConsumerHandler deployment");
     }
 
     return {
-      consumerHandlerAddress: deployment.address,
+      consumerHandlerAddress: await consumerHandler.getAddress(),
       auction,
       snapThresholdWei: plan.snapThresholdWei,
       budgetWei: input.budgetWei.toString(),

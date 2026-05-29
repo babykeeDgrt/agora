@@ -13,7 +13,6 @@ export interface AppEnv {
     consumerHandlerGasLimit: bigint;
     consumerSubscriptionReserveWei: bigint;
     webUrl: string;
-    forgeBin: string;
 }
 
 function requireEnv(name: string): string {
@@ -26,7 +25,7 @@ function requireEnv(name: string): string {
 
 export function loadEnv(): AppEnv {
     return {
-        port: Number(process.env.PORT ?? "3000"),
+        port: Number(process.env.PORT ?? "3300"),
         rpcUrl: requireEnv("RPC_URL"),
         privateKey: requireEnv("PRIVATE_KEY"),
         ...(process.env.HUGGINGFACE_API_KEY
@@ -49,8 +48,5 @@ export function loadEnv(): AppEnv {
                 "32000000000000000000",
         ),
         webUrl: requireEnv("WEB_URL"),
-        forgeBin:
-            process.env.FORGE_BIN ??
-            `${process.env.HOME ?? ""}/.config/.foundry/bin/forge`,
     };
 }

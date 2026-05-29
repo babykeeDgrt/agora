@@ -1,17 +1,13 @@
 import {
     Contract,
-    ContractFactory,
     JsonRpcProvider,
     type ContractTransactionResponse,
     Wallet,
 } from "ethers";
 
+import { dutchAuctionAbi } from "../config/dutchAuctionAbi";
 import { loadEnv, type AppEnv } from "../config/env";
-import {
-    consumerHandlerArtifact,
-    dutchAuctionArtifact,
-    serviceRegistryArtifact,
-} from "./artifacts";
+import { serviceRegistryAbi } from "../config/serviceRegistryAbi";
 
 export interface BlockchainContext {
     env: AppEnv;
@@ -89,17 +85,10 @@ export interface BlockchainContext {
             serviceId: bigint,
             overrides: { value: bigint },
         ): Promise<ContractTransactionResponse>;
-        claimRefund(
-            requestId: bigint,
-        ): Promise<ContractTransactionResponse>;
-        pauseService(
-            serviceId: bigint,
-        ): Promise<ContractTransactionResponse>;
-        resumeService(
-            serviceId: bigint,
-        ): Promise<ContractTransactionResponse>;
+        claimRefund(requestId: bigint): Promise<ContractTransactionResponse>;
+        pauseService(serviceId: bigint): Promise<ContractTransactionResponse>;
+        resumeService(serviceId: bigint): Promise<ContractTransactionResponse>;
     };
-    consumerHandlerFactory: ContractFactory;
 }
 
 export function createBlockchainContext(): BlockchainContext {
@@ -109,25 +98,14 @@ export function createBlockchainContext(): BlockchainContext {
 
     const dutchAuction = new Contract(
         env.dutchAuctionAddress,
-        dutchAuctionArtifact.abi,
+        dutchAuctionAbi,
         wallet,
     ) as BlockchainContext["dutchAuction"];
     const serviceRegistry = new Contract(
         env.serviceRegistryAddress,
-        serviceRegistryArtifact.abi,
+        serviceRegistryAbi,
         wallet,
     ) as BlockchainContext["serviceRegistry"];
-
-    const bytecode = consumerHandlerArtifact.bytecode?.object;
-    if (!bytecode) {
-        throw new Error("ConsumerHandler artifact is missing bytecode");
-    }
-
-    const consumerHandlerFactory = new ContractFactory(
-        consumerHandlerArtifact.abi,
-        bytecode,
-        wallet,
-    );
 
     return {
         env,
@@ -135,6 +113,5 @@ export function createBlockchainContext(): BlockchainContext {
         wallet,
         dutchAuction,
         serviceRegistry,
-        consumerHandlerFactory,
     };
 }

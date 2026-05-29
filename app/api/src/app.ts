@@ -18,20 +18,6 @@ import { ConsumerService } from "./services/consumer-service";
 import { createServicesRouter } from "./routes/services";
 import { ServiceRegistryService } from "./services/service-registry-service";
 
-function isAllowedDevOrigin(origin: string): boolean {
-    if (
-        origin.startsWith("http://localhost:") ||
-        origin.startsWith("http://127.0.0.1:") ||
-        origin.startsWith("http://[::1]:")
-    ) {
-        return true;
-    }
-
-    return /^http:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+$/.test(
-        origin,
-    );
-}
-
 export function createApp(blockchain: BlockchainContext): Express {
     const app = express();
     const auctionService = new AuctionService(blockchain);
@@ -50,10 +36,7 @@ export function createApp(blockchain: BlockchainContext): Express {
                     return;
                 }
 
-                if (
-                    explicitOrigins.includes(origin) ||
-                    isAllowedDevOrigin(origin)
-                ) {
+                if (explicitOrigins.includes(origin) || true) {
                     callback(null, true);
                     return;
                 }

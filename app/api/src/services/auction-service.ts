@@ -1,8 +1,8 @@
 import { Interface, type ContractTransactionReceipt, type Log } from "ethers";
 
+import { dutchAuctionAbi } from "../config/dutchAuctionAbi";
 import type { BlockchainContext } from "../lib/blockchain";
 import { HttpError } from "../lib/http";
-import { dutchAuctionArtifact } from "../lib/artifacts";
 
 const auctionStatusLabels = ["Active", "Snapped", "Expired"] as const;
 
@@ -40,7 +40,7 @@ export class AuctionService {
     private readonly auctionInterface: Interface;
 
     constructor(private readonly blockchain: BlockchainContext) {
-        this.auctionInterface = new Interface(dutchAuctionArtifact.abi);
+        this.auctionInterface = new Interface(dutchAuctionAbi);
     }
 
     async getAuctionCount(): Promise<bigint> {
